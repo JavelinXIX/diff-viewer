@@ -101,13 +101,47 @@
       box-shadow: none;
     }
 
+    .input-panel {
+      border-bottom: 1px solid var(--chrome-dark);
+      background: #edf2f7;
+    }
+
+    .tab-strip {
+      display: flex;
+      gap: 2px;
+      padding: 8px 8px 0;
+      border-bottom: 1px solid var(--chrome-dark);
+    }
+
+    .tab-button {
+      min-height: 32px;
+      padding: 5px 14px;
+      border: 1px solid var(--chrome-dark);
+      border-bottom: 0;
+      border-radius: 4px 4px 0 0;
+      background: linear-gradient(#f8fafc, #dbe4ee);
+      color: #334155;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .tab-button[aria-selected="true"] {
+      position: relative;
+      top: 1px;
+      background: #ffffff;
+      color: #111827;
+    }
+
+    .mode-panel[hidden] {
+      display: none;
+    }
+
     .toolbar {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 8px;
       padding: 8px;
-      border-bottom: 1px solid var(--chrome-dark);
-      background: #edf2f7;
+      background: #ffffff;
     }
 
     .filebar {
@@ -139,8 +173,7 @@
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 8px;
       padding: 8px;
-      border-bottom: 1px solid var(--chrome-dark);
-      background: #f8fafc;
+      background: #ffffff;
     }
 
     .editor {
@@ -367,25 +400,32 @@
       </div>
     </header>
 
-    <section class="toolbar" aria-label="ファイル読込">
-      <div class="filebar">
-        <label for="leftFile">左</label>
-        <input id="leftFile" type="file">
+    <section class="input-panel" aria-label="入力方法">
+      <div class="tab-strip" role="tablist" aria-label="差分入力モード">
+        <button class="tab-button" id="fileTab" type="button" role="tab" aria-controls="filePanel" aria-selected="true" data-mode="file">ファイル比較</button>
+        <button class="tab-button" id="pasteTab" type="button" role="tab" aria-controls="pastePanel" aria-selected="false" data-mode="paste">テキスト貼り付け</button>
       </div>
-      <div class="filebar">
-        <label for="rightFile">右</label>
-        <input id="rightFile" type="file">
-      </div>
-    </section>
 
-    <section class="editors" aria-label="入力">
-      <div class="editor">
-        <div class="editor-header">左テキスト</div>
-        <textarea id="leftInput" spellcheck="false" wrap="off" aria-label="左テキスト"></textarea>
+      <div class="mode-panel toolbar" id="filePanel" role="tabpanel" aria-labelledby="fileTab">
+        <div class="filebar">
+          <label for="leftFile">左</label>
+          <input id="leftFile" type="file">
+        </div>
+        <div class="filebar">
+          <label for="rightFile">右</label>
+          <input id="rightFile" type="file">
+        </div>
       </div>
-      <div class="editor">
-        <div class="editor-header">右テキスト</div>
-        <textarea id="rightInput" spellcheck="false" wrap="off" aria-label="右テキスト"></textarea>
+
+      <div class="mode-panel editors" id="pastePanel" role="tabpanel" aria-labelledby="pasteTab" hidden>
+        <div class="editor">
+          <div class="editor-header">左テキスト</div>
+          <textarea id="leftInput" spellcheck="false" wrap="off" aria-label="左テキスト"></textarea>
+        </div>
+        <div class="editor">
+          <div class="editor-header">右テキスト</div>
+          <textarea id="rightInput" spellcheck="false" wrap="off" aria-label="右テキスト"></textarea>
+        </div>
       </div>
     </section>
 
@@ -424,6 +464,9 @@
       const swapButton = document.getElementById("swapButton");
       const clearButton = document.getElementById("clearButton");
       const statusText = document.getElementById("statusText");
+      const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
+      const filePanel = document.getElementById("filePanel");
+      const pastePanel = document.getElementById("pastePanel");
 
       let syncing = false;
 
@@ -675,6 +718,19 @@
         });
       };
 
+      const setMode = (mode) => {
+        filePanel.hidden = mode !== "file";
+        pastePanel.hidden = mode !== "paste";
+
+        for (const button of tabButtons) {
+          button.setAttribute("aria-selected", String(button.dataset.mode === mode));
+        }
+      };
+
+      for (const button of tabButtons) {
+        button.addEventListener("click", () => setMode(button.dataset.mode));
+      }
+
       leftFile.addEventListener("change", () => readFileInto(leftFile, leftInput));
       rightFile.addEventListener("change", () => readFileInto(rightFile, rightInput));
       compareButton.addEventListener("click", renderDiff);
@@ -702,6 +758,7 @@
       rightPane.addEventListener("scroll", () => syncScroll(rightPane, leftPane));
 
       if (new URLSearchParams(window.location.search).get("demo") === "1") {
+        setMode("paste");
         leftInput.value = [
           "function greet(name) {",
           "  const message = 'Hello, ' + name;",
