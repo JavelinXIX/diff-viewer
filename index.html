@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diff Viewer</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --panel: #ffffff;
+      --chrome: #e5e7eb;
+      --chrome-dark: #cbd5e1;
+      --text: #111827;
+      --muted: #64748b;
+      --line: #d1d5db;
+      --gutter: #eef2f7;
+      --added: #dff5df;
+      --added-word: #9be89f;
+      --deleted: #fde2df;
+      --deleted-word: #ffaaa2;
+      --changed: #fff3bf;
+      --changed-word: #ffd966;
+      --selected: #dbeafe;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      min-height: 100%;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 44px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--chrome-dark);
+      background: linear-gradient(#f8fafc, #e2e8f0);
+    }
+
+    .title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .button {
+      min-height: 30px;
+      padding: 4px 12px;
+      border: 1px solid #9ca3af;
+      border-radius: 3px;
+      background: linear-gradient(#ffffff, #e5e7eb);
+      color: #111827;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+    }
+
+    .button:hover {
+      border-color: #64748b;
+      background: linear-gradient(#ffffff, #dbe4ee);
+    }
+
+    .button:active {
+      background: #d1d5db;
+      box-shadow: none;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+      padding: 8px;
+      border-bottom: 1px solid var(--chrome-dark);
+      background: #edf2f7;
+    }
+
+    .filebar {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 6px 8px;
+      border: 1px solid var(--chrome-dark);
+      border-radius: 4px;
+      background: var(--panel);
+    }
+
+    .filebar label {
+      color: #334155;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .filebar input[type="file"] {
+      min-width: 0;
+      width: 100%;
+      color: #334155;
+    }
+
+    .editors {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+      padding: 8px;
+      border-bottom: 1px solid var(--chrome-dark);
+      background: #f8fafc;
+    }
+
+    .editor {
+      display: grid;
+      grid-template-rows: auto 130px;
+      min-width: 0;
+      border: 1px solid var(--chrome-dark);
+      background: var(--panel);
+    }
+
+    .editor-header,
+    .pane-header {
+      display: flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--chrome-dark);
+      background: linear-gradient(#f8fafc, #e5e7eb);
+      color: #334155;
+      font-weight: 600;
+    }
+
+    textarea {
+      width: 100%;
+      min-width: 0;
+      height: 100%;
+      resize: vertical;
+      padding: 8px;
+      border: 0;
+      outline: none;
+      color: #111827;
+      background: #ffffff;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.45;
+      tab-size: 4;
+    }
+
+    textarea:focus {
+      box-shadow: inset 0 0 0 2px #93c5fd;
+    }
+
+    .diff-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 0;
+      min-height: 0;
+      padding: 8px;
+    }
+
+    .pane {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-width: 0;
+      border: 1px solid var(--chrome-dark);
+      background: var(--panel);
+    }
+
+    .pane + .pane {
+      border-left: 0;
+    }
+
+    .pane-body {
+      overflow: auto;
+      min-height: 0;
+      background: #ffffff;
+      scrollbar-color: #94a3b8 #e2e8f0;
+    }
+
+    .line-row {
+      display: grid;
+      grid-template-columns: 64px minmax(max-content, 1fr);
+      min-height: 22px;
+      border-bottom: 1px solid #eef2f7;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 22px;
+      white-space: pre;
+    }
+
+    .line-row:hover {
+      outline: 1px solid var(--selected);
+      outline-offset: -1px;
+    }
+
+    .line-number {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      padding: 0 8px;
+      border-right: 1px solid var(--line);
+      background: var(--gutter);
+      color: var(--muted);
+      text-align: right;
+      user-select: none;
+    }
+
+    .line-code {
+      min-width: max-content;
+      padding: 0 10px;
+    }
+
+    .line-row.added {
+      background: var(--added);
+    }
+
+    .line-row.deleted {
+      background: var(--deleted);
+    }
+
+    .line-row.changed {
+      background: var(--changed);
+    }
+
+    .line-row.blank {
+      background: #f8fafc;
+    }
+
+    .line-row.added .line-number {
+      background: #cdeecd;
+    }
+
+    .line-row.deleted .line-number {
+      background: #f8ccc7;
+    }
+
+    .line-row.changed .line-number {
+      background: #ffe8a3;
+    }
+
+    .word.added {
+      background: var(--added-word);
+      border-radius: 2px;
+    }
+
+    .word.deleted {
+      background: var(--deleted-word);
+      border-radius: 2px;
+    }
+
+    .word.changed {
+      background: var(--changed-word);
+      border-radius: 2px;
+    }
+
+    .statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-top: 1px solid var(--chrome-dark);
+      background: #e5e7eb;
+      color: #334155;
+      font-size: 12px;
+    }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border: 1px solid rgba(15, 23, 42, 0.18);
+      border-radius: 2px;
+    }
+
+    .swatch.added {
+      background: var(--added);
+    }
+
+    .swatch.deleted {
+      background: var(--deleted);
+    }
+
+    .swatch.changed {
+      background: var(--changed);
+    }
+
+    @media (max-width: 760px) {
+      .titlebar,
+      .statusbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .toolbar,
+      .editors,
+      .diff-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .pane + .pane {
+        border-left: 1px solid var(--chrome-dark);
+        border-top: 0;
+      }
+
+      .editor {
+        grid-template-rows: auto 110px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="titlebar">
+      <h1 class="title">Diff Viewer</h1>
+      <div class="actions" aria-label="操作">
+        <button class="button" id="compareButton" type="button">比較</button>
+        <button class="button" id="swapButton" type="button">左右入替</button>
+        <button class="button" id="clearButton" type="button">クリア</button>
+      </div>
+    </header>
+
+    <section class="toolbar" aria-label="ファイル読込">
+      <div class="filebar">
+        <label for="leftFile">左</label>
+        <input id="leftFile" type="file">
+      </div>
+      <div class="filebar">
+        <label for="rightFile">右</label>
+        <input id="rightFile" type="file">
+      </div>
+    </section>
+
+    <section class="editors" aria-label="入力">
+      <div class="editor">
+        <div class="editor-header">左テキスト</div>
+        <textarea id="leftInput" spellcheck="false" wrap="off" aria-label="左テキスト"></textarea>
+      </div>
+      <div class="editor">
+        <div class="editor-header">右テキスト</div>
+        <textarea id="rightInput" spellcheck="false" wrap="off" aria-label="右テキスト"></textarea>
+      </div>
+    </section>
+
+    <section class="diff-shell" aria-label="差分">
+      <div class="pane">
+        <div class="pane-header">左</div>
+        <div class="pane-body" id="leftPane" tabindex="0" aria-label="左差分"></div>
+      </div>
+      <div class="pane">
+        <div class="pane-header">右</div>
+        <div class="pane-body" id="rightPane" tabindex="0" aria-label="右差分"></div>
+      </div>
+    </section>
+
+    <footer class="statusbar">
+      <div id="statusText">0 行</div>
+      <div class="legend" aria-label="凡例">
+        <span class="legend-item"><span class="swatch added"></span>追加</span>
+        <span class="legend-item"><span class="swatch deleted"></span>削除</span>
+        <span class="legend-item"><span class="swatch changed"></span>変更</span>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const leftInput = document.getElementById("leftInput");
+      const rightInput = document.getElementById("rightInput");
+      const leftFile = document.getElementById("leftFile");
+      const rightFile = document.getElementById("rightFile");
+      const leftPane = document.getElementById("leftPane");
+      const rightPane = document.getElementById("rightPane");
+      const compareButton = document.getElementById("compareButton");
+      const swapButton = document.getElementById("swapButton");
+      const clearButton = document.getElementById("clearButton");
+      const statusText = document.getElementById("statusText");
+
+      let syncing = false;
+
+      const splitLines = (text) => {
+        const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        if (normalized.length === 0) {
+          return [];
+        }
+        const lines = normalized.split("\n");
+        if (lines[lines.length - 1] === "") {
+          lines.pop();
+        }
+        return lines;
+      };
+
+      const buildLcsTable = (left, right, equals) => {
+        const rows = left.length;
+        const cols = right.length;
+        const table = Array.from({ length: rows + 1 }, () => new Uint32Array(cols + 1));
+
+        for (let i = rows - 1; i >= 0; i -= 1) {
+          for (let j = cols - 1; j >= 0; j -= 1) {
+            table[i][j] = equals(left[i], right[j])
+              ? table[i + 1][j + 1] + 1
+              : Math.max(table[i + 1][j], table[i][j + 1]);
+          }
+        }
+
+        return table;
+      };
+
+      const diffSequence = (left, right, equals = (a, b) => a === b) => {
+        const table = buildLcsTable(left, right, equals);
+        const result = [];
+        let i = 0;
+        let j = 0;
+
+        while (i < left.length && j < right.length) {
+          if (equals(left[i], right[j])) {
+            result.push({ type: "equal", left: left[i], right: right[j], leftIndex: i, rightIndex: j });
+            i += 1;
+            j += 1;
+          } else if (table[i + 1][j] >= table[i][j + 1]) {
+            result.push({ type: "delete", left: left[i], leftIndex: i });
+            i += 1;
+          } else {
+            result.push({ type: "add", right: right[j], rightIndex: j });
+            j += 1;
+          }
+        }
+
+        while (i < left.length) {
+          result.push({ type: "delete", left: left[i], leftIndex: i });
+          i += 1;
+        }
+
+        while (j < right.length) {
+          result.push({ type: "add", right: right[j], rightIndex: j });
+          j += 1;
+        }
+
+        return result;
+      };
+
+      const alignLineDiff = (ops) => {
+        const rows = [];
+        let index = 0;
+
+        while (index < ops.length) {
+          const op = ops[index];
+
+          if (op.type === "equal") {
+            rows.push({
+              type: "equal",
+              left: op.left,
+              right: op.right,
+              leftNumber: op.leftIndex + 1,
+              rightNumber: op.rightIndex + 1
+            });
+            index += 1;
+            continue;
+          }
+
+          const deletes = [];
+          const adds = [];
+
+          while (index < ops.length && ops[index].type !== "equal") {
+            if (ops[index].type === "delete") {
+              deletes.push(ops[index]);
+            } else {
+              adds.push(ops[index]);
+            }
+            index += 1;
+          }
+
+          const pairCount = Math.min(deletes.length, adds.length);
+          for (let i = 0; i < pairCount; i += 1) {
+            rows.push({
+              type: "changed",
+              left: deletes[i].left,
+              right: adds[i].right,
+              leftNumber: deletes[i].leftIndex + 1,
+              rightNumber: adds[i].rightIndex + 1
+            });
+          }
+
+          for (let i = pairCount; i < deletes.length; i += 1) {
+            rows.push({
+              type: "deleted",
+              left: deletes[i].left,
+              right: "",
+              leftNumber: deletes[i].leftIndex + 1,
+              rightNumber: null
+            });
+          }
+
+          for (let i = pairCount; i < adds.length; i += 1) {
+            rows.push({
+              type: "added",
+              left: "",
+              right: adds[i].right,
+              leftNumber: null,
+              rightNumber: adds[i].rightIndex + 1
+            });
+          }
+        }
+
+        return rows;
+      };
+
+      const tokenizeWords = (text) => text.match(/(\s+|[A-Za-z0-9_]+|[^\sA-Za-z0-9_])/gu) || [];
+
+      const buildWordParts = (left, right) => {
+        const leftTokens = tokenizeWords(left);
+        const rightTokens = tokenizeWords(right);
+        const ops = diffSequence(leftTokens, rightTokens);
+        const leftParts = [];
+        const rightParts = [];
+
+        for (const op of ops) {
+          if (op.type === "equal") {
+            leftParts.push({ text: op.left, type: "equal" });
+            rightParts.push({ text: op.right, type: "equal" });
+          } else if (op.type === "delete") {
+            leftParts.push({ text: op.left, type: "deleted" });
+          } else {
+            rightParts.push({ text: op.right, type: "added" });
+          }
+        }
+
+        return { leftParts, rightParts };
+      };
+
+      const appendParts = (container, parts) => {
+        if (parts.length === 0) {
+          container.append(document.createTextNode(""));
+          return;
+        }
+
+        for (const part of parts) {
+          if (part.type === "equal") {
+            container.append(document.createTextNode(part.text));
+          } else {
+            const span = document.createElement("span");
+            span.className = `word ${part.type}`;
+            span.textContent = part.text;
+            container.append(span);
+          }
+        }
+      };
+
+      const createLine = (lineNumber, text, rowType, parts) => {
+        const row = document.createElement("div");
+        row.className = `line-row ${rowType}`;
+
+        const number = document.createElement("div");
+        number.className = "line-number";
+        number.textContent = lineNumber === null ? "" : String(lineNumber);
+
+        const code = document.createElement("div");
+        code.className = "line-code";
+        if (parts) {
+          appendParts(code, parts);
+        } else {
+          code.textContent = text;
+        }
+
+        row.append(number, code);
+        return row;
+      };
+
+      const renderDiff = () => {
+        const leftLines = splitLines(leftInput.value);
+        const rightLines = splitLines(rightInput.value);
+        const rows = alignLineDiff(diffSequence(leftLines, rightLines));
+        const leftFragment = document.createDocumentFragment();
+        const rightFragment = document.createDocumentFragment();
+        const stats = { added: 0, deleted: 0, changed: 0 };
+
+        for (const row of rows) {
+          if (row.type === "changed") {
+            stats.changed += 1;
+            const wordParts = buildWordParts(row.left, row.right);
+            leftFragment.append(createLine(row.leftNumber, row.left, "changed", wordParts.leftParts));
+            rightFragment.append(createLine(row.rightNumber, row.right, "changed", wordParts.rightParts));
+          } else if (row.type === "deleted") {
+            stats.deleted += 1;
+            leftFragment.append(createLine(row.leftNumber, row.left, "deleted"));
+            rightFragment.append(createLine(null, "", "blank"));
+          } else if (row.type === "added") {
+            stats.added += 1;
+            leftFragment.append(createLine(null, "", "blank"));
+            rightFragment.append(createLine(row.rightNumber, row.right, "added"));
+          } else {
+            leftFragment.append(createLine(row.leftNumber, row.left, "equal"));
+            rightFragment.append(createLine(row.rightNumber, row.right, "equal"));
+          }
+        }
+
+        leftPane.replaceChildren(leftFragment);
+        rightPane.replaceChildren(rightFragment);
+        statusText.textContent = `${rows.length} 行 / 追加 ${stats.added} / 削除 ${stats.deleted} / 変更 ${stats.changed}`;
+      };
+
+      const readFileInto = (fileInput, textarea) => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          textarea.value = typeof reader.result === "string" ? reader.result : "";
+          renderDiff();
+        });
+        reader.readAsText(file);
+      };
+
+      const syncScroll = (source, target) => {
+        if (syncing) {
+          return;
+        }
+
+        syncing = true;
+        target.scrollTop = source.scrollTop;
+        target.scrollLeft = source.scrollLeft;
+        requestAnimationFrame(() => {
+          syncing = false;
+        });
+      };
+
+      leftFile.addEventListener("change", () => readFileInto(leftFile, leftInput));
+      rightFile.addEventListener("change", () => readFileInto(rightFile, rightInput));
+      compareButton.addEventListener("click", renderDiff);
+      leftInput.addEventListener("input", renderDiff);
+      rightInput.addEventListener("input", renderDiff);
+
+      swapButton.addEventListener("click", () => {
+        const leftValue = leftInput.value;
+        leftInput.value = rightInput.value;
+        rightInput.value = leftValue;
+        leftFile.value = "";
+        rightFile.value = "";
+        renderDiff();
+      });
+
+      clearButton.addEventListener("click", () => {
+        leftInput.value = "";
+        rightInput.value = "";
+        leftFile.value = "";
+        rightFile.value = "";
+        renderDiff();
+      });
+
+      leftPane.addEventListener("scroll", () => syncScroll(leftPane, rightPane));
+      rightPane.addEventListener("scroll", () => syncScroll(rightPane, leftPane));
+
+      renderDiff();
+    })();
+  </script>
+</body>
+</html>
