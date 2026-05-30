@@ -701,6 +701,26 @@
       leftPane.addEventListener("scroll", () => syncScroll(leftPane, rightPane));
       rightPane.addEventListener("scroll", () => syncScroll(rightPane, leftPane));
 
+      if (new URLSearchParams(window.location.search).get("demo") === "1") {
+        leftInput.value = [
+          "function greet(name) {",
+          "  const message = 'Hello, ' + name;",
+          "  return message;",
+          "}",
+          "",
+          "console.log(greet('WinMerge'));"
+        ].join("\n");
+        rightInput.value = [
+          "function greet(userName) {",
+          "  const message = 'Hello, ' + userName + '!';",
+          "  return message.trim();",
+          "}",
+          "",
+          "console.log(greet('Diff Viewer'));",
+          "console.log('done');"
+        ].join("\n");
+      }
+
       renderDiff();
     })();
   </script>
